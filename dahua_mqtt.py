@@ -20,7 +20,9 @@ DahuaMQTT:
       topic: cameras/2
       events: VideoMotion,VideoBlind,VideoLoss,AlarmLocal,....
 
-MQTT topic will be: cameras/1/<event>, ex: cameras/1/VideoMotion and payload will be action: Start or Stop
+App sends two MQTT topics:
+First MQTT topic will be: cameras/1/<event>, ex: cameras/1/VideoMotion and payload will be action: Start or Stop
+Second MQTT topic will be: cameras/1, ex: cameras/1 and payload will be data received from camera in JSON format
 
 According to the API docs, these events are available: (availability depends on your device and firmware)
 	VideoMotion: motion detection event
@@ -48,6 +50,8 @@ import appdaemon.plugins.hass.hassapi as hass
 import socket
 import pycurl
 import time
+import threading
+import json
 from threading import Thread
 
 URL_TEMPLATE = "http://{host}:{port}/cgi-bin/eventManager.cgi?action=attach&codes=%5B{events}%5D"
@@ -83,12 +87,14 @@ class DahuaMQTT(hass.Hass):
 			self.curl_multiobj.add_handle(curlobj)
 			self.num_curlobj += 1
 
+		self.log("Starting thread")
 		self.proc = Thread(target=self.thread_process)
 		self.proc.daemon = False
 		self.proc.start()
 
 	def terminate(self):
 		if self.proc and self.proc.is_alive():
+			self.log("Killing thread")
 			self.kill_thread = True
 			self.proc.join()
 
@@ -135,6 +141,8 @@ class DahuaMQTT(hass.Hass):
 				if ret != pycurl.E_CALL_MULTI_PERFORM:
 					break
 
+		self.log("Thread exited")
+
 
 class DahuaCamera:
 
@@ -148,8 +156,17 @@ class DahuaCamera:
 		self.alarm = None
 
 	def on_alarm(self, state):
-		self.hass.log("[{0}] Alarm triggered: {1}".format(self.camera["host"], state))
-		self.hass.call_service("mqtt/publish", topic=self.camera["topic"] + state["code"], payload=state["action"])
+
+		# Publish two topics
+		mqtt_data = {
+			self.camera["topic"]: json.dumps(state),
+			self.camera["topic"] + state["code"]: state["action"]
+		}
+
+		for topic, payload in mqtt_data.items():
+			topic = topic.strip("/")
+			self.hass.log("[{0}] Publishing MQTT. topic={1}, payload={2}".format(self.camera["host"], topic, payload))
+			self.hass.call_service("mqtt/publish", topic=topic, payload=payload)
 
 	def on_connect(self):
 		self.hass.log("[{0}] OnConnect()".format(self.camera["host"]))
@@ -181,7 +198,7 @@ class DahuaCamera:
 				self.hass.log("Failed to parse: {0}".format(str(ex)))
 
 	def parse_event(self, alarm):
-		self.hass.log("[{0}] Parse Event ({1})".format(self.camera["host"], alarm))
+		# self.hass.log("[{0}] Parse Event ({1})".format(self.camera["host"], alarm))
 
 		if alarm["code"] not in self.camera["events"].split(','):
 			return
