@@ -84,6 +84,10 @@ class DahuaMQTT(hass.Hass):
 			curlobj.setopt(pycurl.USERPWD, "{0}:{1}".format(camera["user"], camera["pass"]))
 			curlobj.setopt(pycurl.WRITEFUNCTION, dahuacam.on_receive)
 
+			if "ignore_ssl" in self.args and self.args["ignore_ssl"] is True:
+				curlobj.setopt(pycurl.SSL_VERIFYPEER, 0)   
+				curlobj.setopt(pycurl.SSL_VERIFYHOST, 0)
+			
 			self.curl_multiobj.add_handle(curlobj)
 			self.num_curlobj += 1
 
