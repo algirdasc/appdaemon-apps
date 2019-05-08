@@ -161,6 +161,10 @@ class DahuaCamera:
 
 	def on_alarm(self, state):
 
+		# Convert data from JSON string to JSON object
+		if "data" in state:
+			state["data"] = json.loads(state["data"])
+		
 		# Publish two topics
 		mqtt_data = {
 			self.camera["topic"]: json.dumps(state),
