@@ -12,6 +12,7 @@ DahuaMQTT:
       user: user
       pass: pass
       topic: cameras/1
+      retain: true
       events: VideoMotion,VideoBlind,VideoLoss,AlarmLocal,....
     - host: 192.168.0.2
       port: 80
@@ -170,11 +171,11 @@ class DahuaCamera:
 			self.camera["topic"]: json.dumps(state),
 			self.camera["topic"] + state["code"]: state["action"]
 		}
-
+		
 		for topic, payload in mqtt_data.items():
 			topic = topic.strip("/")
 			self.hass.log("[{0}] Publishing MQTT. topic={1}, payload={2}".format(self.camera["host"], topic, payload))
-			self.hass.call_service("mqtt/publish", topic=topic, payload=payload)
+			self.hass.call_service("mqtt/publish", topic=topic, payload=payload, retain=self.camera["retain"])
 
 	def on_connect(self):
 		self.hass.log("[{0}] OnConnect()".format(self.camera["host"]))
